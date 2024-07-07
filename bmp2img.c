@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
-#include <sys/types.h>
 #include "bmp.h"
 
 typedef struct {
@@ -21,7 +20,7 @@ static const bmp_palette_entry_t pal[16] = {
   {0x55,0x55,0xff,0x00}, {0xff,0x55,0xff,0x00}, {0x55,0xff,0xff,0x00}, {0xff,0xff,0xff,0x00},
 };
  
-int load_bmp(memstream_buf_t *dst, const char *src, uint *width, uint *height);
+int load_bmp(memstream_buf_t *dst, const char *src, uint16_t *width, uint16_t *height);
 void lin2pln(memstream_buf_t *dst, memstream_buf_t *src);
 
 size_t filesize(FILE *f);
@@ -37,8 +36,8 @@ int main(int argc, char *argv[]) {
     memstream_buf_t img = {0, 0, NULL}; // planar data from file
     memstream_buf_t src = {0, 0, NULL}; // de-planed data
     char resolution[10];
-    uint width;
-    uint height;
+    uint16_t width;
+    uint16_t height;
 
     printf("BMP to SSI-IMG image converter\n");
 
@@ -174,7 +173,7 @@ void lin2pln(memstream_buf_t *dst, memstream_buf_t *src) {
 /// @param width  pointer to width of the image in pixels set on return
 /// @param height pointer to height of the image in pixels or lines set on return
 /// @return  0 on success, otherwise an error code
-int load_bmp(memstream_buf_t *dst, const char *fn, uint *width, uint *height) {
+int load_bmp(memstream_buf_t *dst, const char *fn, uint16_t *width, uint16_t *height) {
     int rval = 0;
     FILE *fp = NULL;
     uint8_t *buf = NULL; // line buffer
@@ -243,8 +242,8 @@ int load_bmp(memstream_buf_t *dst, const char *fn, uint *width, uint *height) {
     bool flip = (bmp->bmi.image_height < 0); 
     bmp->bmi.image_height = abs(bmp->bmi.image_height);
 
-    uint lw = bmp->bmi.image_width;
-    uint lh = bmp->bmi.image_height;
+    uint16_t lw = bmp->bmi.image_width;
+    uint16_t lh = bmp->bmi.image_height;
 
     // stride is the bytes per line in the BMP file, which are padded
     // we get 2 pixels per byte for being 16 colour

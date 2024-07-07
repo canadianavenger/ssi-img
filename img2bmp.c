@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
-#include <sys/types.h>
 #include "bmp.h"
 
 typedef struct {
@@ -21,7 +20,7 @@ static const bmp_palette_entry_t pal[16] = {
   {0x55,0x55,0xff,0x00}, {0xff,0x55,0xff,0x00}, {0x55,0xff,0xff,0x00}, {0xff,0xff,0xff,0x00},
 };
  
-int save_bmp(const char *dst, memstream_buf_t *src, uint width, uint height);
+int save_bmp(const char *dst, memstream_buf_t *src, uint16_t width, uint16_t height);
 void pln2lin(memstream_buf_t *dst, memstream_buf_t *src);
 
 size_t filesize(FILE *f);
@@ -37,8 +36,8 @@ int main(int argc, char *argv[]) {
     memstream_buf_t img = {0, 0, NULL}; // planar data from file
     memstream_buf_t src = {0, 0, NULL}; // de-planed data
     char resolution[10];
-    uint width;
-    uint height;
+    uint16_t width;
+    uint16_t height;
 
     printf("SSI-IMG to BMP image converter\n");
 
@@ -83,7 +82,7 @@ int main(int argc, char *argv[]) {
     }
 
     // parse the resolution string
-    sscanf(resolution, "%u%*[xX]%u", &width, &height);
+    sscanf(resolution, "%hu%*[xX]%hu", &width, &height);
     printf("Resolution: %d x %d\n", width, height);
 
     // allocate buffers based on resolution
@@ -199,7 +198,7 @@ void pln2lin(memstream_buf_t *dst, memstream_buf_t *src) {
 /// @param width  width of the image in pixels
 /// @param height height of the image in pixels or lines
 /// @return 0 on success, otherwise an error code
-int save_bmp(const char *fn, memstream_buf_t *src, uint width, uint height) {
+int save_bmp(const char *fn, memstream_buf_t *src, uint16_t width, uint16_t height) {
     int rval = 0;
     FILE *fp = NULL;
     uint8_t *buf = NULL; // line buffer, also holds header info
