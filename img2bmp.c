@@ -277,7 +277,7 @@ int save_bmp(const char *fn, memstream_buf_t *src, uint16_t width, uint16_t heig
     uint8_t *px = &src->data[src->len - width];
     // loop through the lines
     for(int y = 0; y < height; y++) {
-        bzero(buf, stride); // zero out the line in the output buffer
+        memset(buf, 0, stride); // zero out the line in the output buffer
         // loop through all the pixels for a line
         // we are packing 2 pixels per byte, so width is half
         for(int x = 0; x < ((width + 1) / 2); x++) {
