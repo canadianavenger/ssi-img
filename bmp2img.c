@@ -1,3 +1,15 @@
+/*
+ * bmp2img.c 
+ * Converts a given Windows BMP file to a SSI-IMG (for EGA/VGA graphics)
+ * 
+ * The BMP file must be an uncompressed 16 colour indexed BMP. This program does
+ * not do any palette matching or remapping, so it is expected that the colour
+ * indicies are those of the EGA/VGA 16 colour palette
+ * 
+ * This code is offered without warranty under the MIT License. Use it as you will 
+ * personally or commercially, just give credit if you do.
+ */
+
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -12,7 +24,7 @@ typedef struct {
     uint8_t     *data;       // pointer to bytes in memory
 } memstream_buf_t;
 
-// default CGA/EGA/VGA 16 colour palette
+// default EGA/VGA 16 colour palette
 static const bmp_palette_entry_t pal[16] = { 
   {0x00,0x00,0x00,0x00}, {0xaa,0x00,0x00,0x00}, {0x00,0xaa,0x00,0x00}, {0xaa,0xaa,0x00,0x00}, 
   {0x00,0x00,0xaa,0x00}, {0xaa,0x00,0xaa,0x00}, {0x00,0x55,0xaa,0x00}, {0xaa,0xaa,0xaa,0x00},
@@ -41,7 +53,7 @@ int main(int argc, char *argv[]) {
 
     printf("BMP to SSI-IMG image converter\n");
 
-    if(argc < 2) {
+    if((argc < 2) || (argc > 3)) {
         printf("USAGE %s [infile] <outfile>\n", argv[0]);
         printf("[infile] is the name of the input file\n");
         printf("<outfile> is optional and the name of the output file\n");

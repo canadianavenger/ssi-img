@@ -1,3 +1,10 @@
+/*
+ * bmp.h 
+ * structure definitions for a Windows BMP file
+ * 
+ * This code is offered without warranty under the MIT License. Use it as you will 
+ * personally or commercially, just give credit if you do.
+ */
 #include <stdint.h>
 
 #ifndef SSI_IMG_BMP

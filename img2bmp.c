@@ -1,3 +1,14 @@
+/*
+ * img2bmp.c 
+ * Converts a given SSI-IMG (for EGA/VGA graphics) to a Windows BMP file
+ * 
+ * The input IMG file must be for EGA/VGA, the CGA graphics IMG files have a
+ * different layout and are not supported by this code
+ * 
+ * This code is offered without warranty under the MIT License. Use it as you will 
+ * personally or commercially, just give credit if you do.
+ */
+
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -12,7 +23,7 @@ typedef struct {
     uint8_t     *data;       // pointer to bytes in memory
 } memstream_buf_t;
 
-// default CGA/EGA/VGA 16 colour palette
+// default EGA/VGA 16 colour palette
 static const bmp_palette_entry_t pal[16] = { 
   {0x00,0x00,0x00,0x00}, {0xaa,0x00,0x00,0x00}, {0x00,0xaa,0x00,0x00}, {0xaa,0xaa,0x00,0x00}, 
   {0x00,0x00,0xaa,0x00}, {0xaa,0x00,0xaa,0x00}, {0x00,0x55,0xaa,0x00}, {0xaa,0xaa,0xaa,0x00},
@@ -41,7 +52,7 @@ int main(int argc, char *argv[]) {
 
     printf("SSI-IMG to BMP image converter\n");
 
-    if(argc < 3) {
+    if((argc < 3) || (argc > 4)) {
         printf("USAGE %s [resolution] [infile] <outfile>\n", argv[0]);
         printf("where [resolution] is in the form width x height eg '320x200'\n");
         printf("[infile] is the name of the input file\n");
