@@ -69,11 +69,13 @@ int main(int argc, char *argv[]) {
     if((argc < 3) || (argc > 4)) {
         printf("USAGE: %s [resolution]<adapter><palette> [infile] <outfile>\n", basename(argv[0]));
         printf("where [resolution] is in the form width x height eg '320x200'\n");
-        printf("The resolution paramter can have a number of optional suffixes to change the conversion\n");
-        printf("- a suffix of 'e' '640x200e' will force EGA interpretation of the input file (default behavior if omitted)\n");
-        printf("- a suffix of 'c' '320x200c' will force CGA interpretation of the input file (default behavior if omitted)\n");
-        printf("The 'c' suffix also allows for an optional additonal suffix in the form of a single digit in the range of 0-5. ");
-        printf("This digit specifies which of the CGA palettes to use. eg '320x200c1' Palette 1 is the default if omitted\n");
+        printf("The resolution paramter can have a number of optional suffixes to\n");
+        printf("change the interpretation. (EGA is default)\n");
+        printf("- a suffix of 'e' '640x200e' will force EGA interpretation of the input file\n");
+        printf("- a suffix of 'c' '320x200c' will force CGA interpretation of the input file\n");
+        printf("The 'c' suffix also allows for an optional additonal suffix in the form of a\n");
+        printf("single digit in the range of 0-5. This digit specifies which of the CGA palettes\n");
+        printf("to use. eg '320x200c1' Palette 1 is the default if omitted\n");
         printf("CGA Palettes:\n");
         printf(" 0: black, dark green,  dark red,      brown      mode:4 pal:0 low intensity\n");
         printf(" 1: black, light green, light red,     yellow     mode:4 pal:0 high intensity\n");
@@ -83,8 +85,8 @@ int main(int argc, char *argv[]) {
         printf(" 5: black, light cyan,  light red,     white      mode:5 high intensity\n");
         printf("[infile] is the name of the input file\n");
         printf("<outfile> is optional and the name of the output file\n");
-        printf("if omitted, outfile will be named the same as infile, except with a .BMP extension\n");
-        return -1;
+        printf("if omitted, outfile will be named the same as infile with a .BMP extension\n");
+         return -1;
     }
     argv++; argc--; // consume the first arg (program name)
 

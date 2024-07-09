@@ -50,7 +50,7 @@ int main(int argc, char *argv[]) {
         printf("USAGE: %s [infile] <outfile>\n", basename(argv[0]));
         printf("[infile] is the name of the input file\n");
         printf("<outfile> is optional and the name of the output file\n");
-        printf("if omitted, the output will be named the same as infile, except with a .IMG extension\n");
+        printf("if omitted, outfile will be named the same as infile with a .IMG extension\n");
         return -1;
     }
     argv++; argc--; // consume the first arg (program name)
