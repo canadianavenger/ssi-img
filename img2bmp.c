@@ -1,10 +1,7 @@
 /*
  * img2bmp.c 
- * Converts a given SSI-IMG (for EGA/VGA graphics) to a Windows BMP file
- * 
- * The input IMG file must be for EGA/VGA, the CGA graphics IMG files have a
- * different layout and are currently not supported by this code.
- * 
+ * Converts a given SSI-IMG to a Windows BMP file
+ *  
  * This code is offered without warranty under the MIT License. Use it as you will 
  * personally or commercially, just give credit if you do.
  */
@@ -25,15 +22,27 @@ typedef struct {
 } memstream_buf_t;
 
 // default EGA/VGA 16 colour palette
-static const bmp_palette_entry_t pal[16] = { 
+static bmp_palette_entry_t ega_pal[16] = { 
   {0x00,0x00,0x00,0x00}, {0xaa,0x00,0x00,0x00}, {0x00,0xaa,0x00,0x00}, {0xaa,0xaa,0x00,0x00}, 
   {0x00,0x00,0xaa,0x00}, {0xaa,0x00,0xaa,0x00}, {0x00,0x55,0xaa,0x00}, {0xaa,0xaa,0xaa,0x00},
   {0x55,0x55,0x55,0x00}, {0xff,0x55,0x55,0x00}, {0x55,0xff,0x55,0x00}, {0xff,0xff,0x55,0x00}, 
   {0x55,0x55,0xff,0x00}, {0xff,0x55,0xff,0x00}, {0x55,0xff,0xff,0x00}, {0xff,0xff,0xff,0x00},
 };
- 
-int save_bmp(const char *dst, memstream_buf_t *src, uint16_t width, uint16_t height);
+// remaps the CGA colour indicies to the EGA equivalents for each of the palettes
+// background is assumed to be black, though in reality it can be programmed to
+// any of the 16 colours
+uint8_t cga2ega[6][4] = {
+    {0,2,4,6},     // mode 4 palette 0 low intensity  [black, dark green, dark red, brown]
+    {0,10,12,14},  // mode 4 palette 0 high intensity [black, light green, light red, yellow]
+    {0,3,5,7},     // mode 4 palette 1 low intensity  [black, dark cyan, dark magenta, light grey]
+    {0,11,13,15},  // mode 4 palette 1 high intensity [black, light cyan, light magenta, white]
+    {0,3,4,7},     // mode 5 low intensity            [black, dark cyan, dark red, light gray]
+    {0,11,12,15}   // mode 5 high intensity           [black, light cyan, light red, white]
+};
+
+int save_bmp(const char *dst, memstream_buf_t *src, uint16_t width, uint16_t height, bmp_palette_entry_t *pal);
 void pln2lin(memstream_buf_t *dst, memstream_buf_t *src);
+void lace2lin(memstream_buf_t *dst, memstream_buf_t *src, uint16_t width, uint16_t height);
 
 size_t filesize(FILE *f);
 void drop_extension(char *fn);
@@ -50,12 +59,28 @@ int main(int argc, char *argv[]) {
     char resolution[10];
     uint16_t width;
     uint16_t height;
+    uint8_t pal_sel = 1; // which CGA palette to use if CGA mode selected
+    bool is_cga = false; // flag to indicate to use CGA mode
+    bmp_palette_entry_t *cga_pal = NULL; // the dynamically allocated CGA palette
+    bmp_palette_entry_t *pal = NULL; // set to point to which palette used (not allocted)
 
     printf("SSI-IMG to BMP image converter\n");
 
     if((argc < 3) || (argc > 4)) {
-        printf("USAGE: %s [resolution] [infile] <outfile>\n", basename(argv[0]));
+        printf("USAGE: %s [resolution]<adapter><palette> [infile] <outfile>\n", basename(argv[0]));
         printf("where [resolution] is in the form width x height eg '320x200'\n");
+        printf("the resolution paramter can have a number of optional suffixes to change the conversion\n");
+        printf("a suffix of 'e' '640x200e' will force EGA interpretation of the input file (default behavior if omitted)\n");
+        printf("a suffix of 'c' '320x200c' will force CGA interpretation of the input file (default behavior if omitted)\n");
+        printf("the 'c' suffix also allows for an optional additonal suffix in the form of a single digit in the range of 0-5\n");
+        printf("this digit specifies which of the CGA palettes to use. eg '320x200c1' Palette 1 is the default if omitted\n");
+        printf("CGA Palettes:\n");
+        printf("\t0: black, dark green,  dark red,      brown      (mode 4 palette 0 low intensity)\n");
+        printf("\t1: black, light green, light red,     yellow     (mode 4 palette 0 high intensity)\n");
+        printf("\t2: black, dark cyan,   dark magenta,  light grey (mode 4 palette 1 low intensity)\n");
+        printf("\t3: black, light cyan,  light magenta, white      (mode 4 palette 1 high intensity)\n");
+        printf("\t4: black, dark cyan,   dark red,      light gray (mode 5 low intensity)\n");
+        printf("\t5: black, light cyan,  light red,     white      (mode 5 high intensity)\n");
         printf("[infile] is the name of the input file\n");
         printf("<outfile> is optional and the name of the output file\n");
         printf("if omitted, outfile will be named the same as infile, except with a .BMP extension\n");
@@ -94,16 +119,38 @@ int main(int argc, char *argv[]) {
     }
 
     // parse the resolution string
-    sscanf(resolution, "%hu%*[xX]%hu", &width, &height);
-    printf("Resolution: %d x %d\n", width, height);
-
-    // allocate buffers based on resolution
-    // allocate the packed image buffer (width * height) / 2
-    if(NULL == (img.data = calloc(height, width/2))) {
-        printf("Unable to allocate memory\n");
+    char charfmt = 0;
+    char charpal = 0;
+    sscanf(resolution, "%hu%*[xX]%hu%c%c", &width, &height, &charfmt, &charpal); // scanf for new resolution line
+    if((0 == width) || (0 == height)) {
+        printf("Invalid resolution specificaton\n");
         goto CLEANUP;
     }
-    img.len = (width * height) / 2;
+
+    // parse the optional suffixes
+    if(charfmt) { // format specifier was provided
+        if('c' == tolower(charfmt)) {
+            is_cga = true;
+            if(charpal) { 
+                if(isdigit(charpal)) {
+                    pal_sel = charpal - '0';
+                    if(pal_sel > 5) {
+                        printf("Invalid palette specifier");
+                        goto CLEANUP;
+                    }
+                } else {
+                    printf("Invalid palette specifier");
+                    goto CLEANUP;
+                }
+            }
+        } else if('e' != tolower(charfmt)) {
+            printf("Invalid format specifier\n");
+            goto CLEANUP;
+        }
+    }
+    printf("Resolution: %d x %d %s\n", width, height, is_cga?"CGA":"EGA");
+
+    // allocate buffer based on resolution
     // allocate the deplaned/unpaced image buffer (width * height)
     if(NULL == (src.data = calloc(height, width))) {
         printf("Unable to allocate memory\n");
@@ -118,26 +165,58 @@ int main(int argc, char *argv[]) {
         goto CLEANUP;
     }
 
-        // determine size of image file
+    // determine size of image file
     size_t fsz = filesize(fi);
     printf("\tFile Size: %zu\n", fsz);
 
-    if(fsz != img.len) {
-        printf("File image and Specified image size mismatch\n");
+    // allocate the packed image buffer based on the file size
+    if(NULL == (img.data = calloc(1, fsz))) {
+        printf("Unable to allocate memory\n");
         goto CLEANUP;
     }
+    img.len = fsz;
 
+    // do some basic checking based on filesize
+    if(is_cga) {
+        if(fsz != 16384) {
+            printf("File image and Specified image size mismatch for CGA\n");
+            goto CLEANUP;
+        }
+    } else { // must be ega
+        if(fsz != ((width * height) / 2)) {
+            printf("File image and Specified image size mismatch for EGA\n");
+            goto CLEANUP;
+        }
+    }
+
+    // read in the file
     int nr = fread(img.data, img.len, 1, fi);
     if(1 != nr) {
         printf("Error Unable read file\n");
         goto CLEANUP;
     }
 
-    pln2lin(&src, &img); // deplane the image
+    if(is_cga) {
+        lace2lin(&src, &img, width, height); // de-interlace the image
+        // create our palette 
+        if(NULL == (cga_pal = calloc(16, sizeof(bmp_palette_entry_t)))) {
+            printf("Unable to allocate memory\n");
+            goto CLEANUP;
+        }
+        // copy the EGA palette entries over to their CGA locations
+        // for the selected palette
+        for(int p = 0; p < 4; p++) {
+            cga_pal[p] = ega_pal[cga2ega[pal_sel][p]];
+        }
+        pal = cga_pal;
+    } else { // must be ega
+        pln2lin(&src, &img); // deplane the image
+        pal = ega_pal;
+    }
     src.pos = 0; // reset the src position
 
     printf("Creating BMP File: '%s'\n", fo_name);
-    rval = save_bmp(fo_name, &src, width, height);
+    rval = save_bmp(fo_name, &src, width, height, pal);
     if(0 != rval) {
         printf("BMP Save Error (%d)\n", rval);
         goto CLEANUP;
@@ -149,6 +228,7 @@ CLEANUP:
     fclose_s(fi);
     free_s(fi_name);
     free_s(fo_name);
+    free_s(cga_pal);
     free_s(img.data);
     free_s(src.data);
     return rval;
@@ -199,6 +279,37 @@ void pln2lin(memstream_buf_t *dst, memstream_buf_t *src) {
     }
 }
 
+/// @brief converts a interleved image to a linear one, assumes 4 colour 2 bits per pixel
+/// @param dst memstream buffer pointing to buffer large enough for 1 byte per pixel
+/// @param src memstream buffer pointing to a buffer containing the packed planar image
+void lace2lin(memstream_buf_t *dst, memstream_buf_t *src, uint16_t width, uint16_t height) {
+    width /= 4;  // we expect 4 pixels per byte
+    height /= 2; // we always expect lines to be in interleved pairs
+
+    int even_pos = 0;
+    int odd_pos = src->len / 2; // 1/2
+
+    for(int y = 0; y < height; y++) {
+        // even line
+        for(int x = 0; x < width; x++) {
+            uint16_t pbuf = src->data[even_pos++];
+            for(int b = 0; b < 4; b++) { // 4 pixels per byte
+                pbuf <<= 2; // shift in the pixel
+                uint8_t px = (pbuf >> 8) & 0x03; // move it to position and mask
+                if(dst->pos < dst->len) dst->data[dst->pos++] = px; 
+            }
+        }
+        // odd line
+        for(int x = 0; x < width; x++) {
+            uint16_t pbuf = src->data[odd_pos++];
+            for(int b = 0; b < 4; b++) { // 4 pixels per byte
+                pbuf <<= 2; // shift in the pixel
+                uint8_t px = (pbuf >> 8) & 0x03; // move it to position and mask
+                if(dst->pos < dst->len) dst->data[dst->pos++] = px; 
+            }
+        }
+    }
+}
 
 // allocate a header buffer large enough for all 3 parts, plus 16 bit padding at the start to 
 // maintian 32 bit alignment after the 16 bit signature.
@@ -209,8 +320,9 @@ void pln2lin(memstream_buf_t *dst, memstream_buf_t *src) {
 /// @param src memstream buffer pointer to the source image data
 /// @param width  width of the image in pixels
 /// @param height height of the image in pixels or lines
+/// @param pal pointe to 16 entry palette
 /// @return 0 on success, otherwise an error code
-int save_bmp(const char *fn, memstream_buf_t *src, uint16_t width, uint16_t height) {
+int save_bmp(const char *fn, memstream_buf_t *src, uint16_t width, uint16_t height, bmp_palette_entry_t *pal) {
     int rval = 0;
     FILE *fp = NULL;
     uint8_t *buf = NULL; // line buffer, also holds header info
@@ -249,7 +361,8 @@ int save_bmp(const char *fn, memstream_buf_t *src, uint16_t width, uint16_t heig
 
     // setup the signature and DIB header fields
     *sig = BMPFILESIG;
-    bmp->dib.image_offset = HDRBUFSZ + sizeof(pal);
+    size_t palsz = sizeof(bmp_palette_entry_t) * 16;
+    bmp->dib.image_offset = HDRBUFSZ + palsz;
     bmp->dib.file_size = bmp->dib.image_offset + bmp_img_sz;
 
     // setup the bmi header fields
@@ -274,7 +387,7 @@ int save_bmp(const char *fn, memstream_buf_t *src, uint16_t width, uint16_t heig
 
     // we're using our global palette here, wich is already in BMP format
     // write out the palette
-    nr = fwrite(pal, sizeof(pal), 1, fp);
+    nr = fwrite(pal, palsz, 1, fp);
     if(1 != nr) {
         rval = -4;  // can't write file
         goto bmp_cleanup;
