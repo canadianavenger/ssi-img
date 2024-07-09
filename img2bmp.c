@@ -3,7 +3,7 @@
  * Converts a given SSI-IMG (for EGA/VGA graphics) to a Windows BMP file
  * 
  * The input IMG file must be for EGA/VGA, the CGA graphics IMG files have a
- * different layout and are not supported by this code
+ * different layout and are currently not supported by this code.
  * 
  * This code is offered without warranty under the MIT License. Use it as you will 
  * personally or commercially, just give credit if you do.
@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+#include <libgen.h>
 #include "bmp.h"
 
 typedef struct {
@@ -53,11 +54,11 @@ int main(int argc, char *argv[]) {
     printf("SSI-IMG to BMP image converter\n");
 
     if((argc < 3) || (argc > 4)) {
-        printf("USAGE %s [resolution] [infile] <outfile>\n", argv[0]);
+        printf("USAGE: %s [resolution] [infile] <outfile>\n", basename(argv[0]));
         printf("where [resolution] is in the form width x height eg '320x200'\n");
         printf("[infile] is the name of the input file\n");
         printf("<outfile> is optional and the name of the output file\n");
-        printf("if omitted, the output will be named the same as infile, except with a .BMP extension\n");
+        printf("if omitted, outfile will be named the same as infile, except with a .BMP extension\n");
         return -1;
     }
     argv++; argc--; // consume the first arg (program name)
@@ -111,7 +112,7 @@ int main(int argc, char *argv[]) {
     src.len = (width * height);
 
     // open the input file
-    printf("Opening IMG File: %s", fi_name);
+    printf("Opening IMG File: '%s'", fi_name);
     if(NULL == (fi = fopen(fi_name,"rb"))) {
         printf("Error: Unable to open input file\n");
         goto CLEANUP;
@@ -135,7 +136,7 @@ int main(int argc, char *argv[]) {
     pln2lin(&src, &img); // deplane the image
     src.pos = 0; // reset the src position
 
-    printf("Creating BMP File: %s\n", fo_name);
+    printf("Creating BMP File: '%s'\n", fo_name);
     rval = save_bmp(fo_name, &src, width, height);
     if(0 != rval) {
         printf("BMP Save Error (%d)\n", rval);
@@ -158,21 +159,21 @@ CLEANUP:
 /// @return returns the size of the file
 size_t filesize(FILE *f) {
     size_t szll, cp;
-    cp = ftell(f); // save current position
-    fseek(f, 0, SEEK_END); // find the end
-    szll = ftell(f); // get positon of the end
-    fseek(f, cp, SEEK_SET); // restor the file position
-    return szll; // return position of the end as size
+    cp = ftell(f);           // save current position
+    fseek(f, 0, SEEK_END);   // find the end
+    szll = ftell(f);         // get positon of the end
+    fseek(f, cp, SEEK_SET);  // restore the file position
+    return szll;             // return position of the end as size
 }
 
-/// @brief removes the extension form a filename
+/// @brief removes the extension from a filename
 /// @param fn sting pointer to the filename
 void drop_extension(char *fn) {
     char *extension = strrchr(fn, '.');
     if(NULL != extension) *extension = 0; // strip out the existing extension
 }
 
-/// @brief converts a panerized image to a linear one
+/// @brief converts a planerized image to a linear one, assumes 16 colour 4 bits per pixel
 /// @param dst memstream buffer pointing to buffer large enough for 1 byte per pixel
 /// @param src memstream buffer pointing to a buffer containing the packed planar image
 void pln2lin(memstream_buf_t *dst, memstream_buf_t *src) {
@@ -255,14 +256,14 @@ int save_bmp(const char *fn, memstream_buf_t *src, uint16_t width, uint16_t heig
     bmp->bmi.header_size = sizeof(bmi_header_t);
     bmp->bmi.image_width = width;
     bmp->bmi.image_height = height;
-    bmp->bmi.num_planes = 1;     // always 1
-    bmp->bmi.bits_per_pixel = 4; // 16 colour image
-    bmp->bmi.compression = 0;    // uncompressed
+    bmp->bmi.num_planes = 1;           // always 1
+    bmp->bmi.bits_per_pixel = 4;       // 16 colour image
+    bmp->bmi.compression = 0;          // uncompressed
     bmp->bmi.bitmap_size = bmp_img_sz;
     bmp->bmi.horiz_res = BMP96DPI;
     bmp->bmi.vert_res = BMP96DPI;
-    bmp->bmi.num_colors = 16; // palette has 16 colours
-    bmp->bmi.important_colors = 0; // all colours are important
+    bmp->bmi.num_colors = 16;          // palette has 16 colours
+    bmp->bmi.important_colors = 0;     // all colours are important
 
     // write out the header
     int nr = fwrite(sig, HDRBUFSZ, 1, fp);
@@ -292,12 +293,12 @@ int save_bmp(const char *fn, memstream_buf_t *src, uint16_t width, uint16_t heig
         // loop through all the pixels for a line
         // we are packing 2 pixels per byte, so width is half
         for(int x = 0; x < ((width + 1) / 2); x++) {
-            uint8_t sp = *px++; // get the first pixel
-            sp <<= 4; // shift it to make room for the next one
-            if((x * 2 + 1) < width) { // test for odd pixel end
-                sp |= (*px++) & 0x0f; // get the next pixel
+            uint8_t sp = *px++;          // get the first pixel
+            sp <<= 4;                    // shift to make room
+            if((x * 2 + 1) < width) {    // test for odd pixel end
+                sp |= (*px++) & 0x0f;    // get the next pixel
             }
-            buf[x] = sp; // write it to the line buffer
+            buf[x] = sp;                 // write it to the line buffer
         }
         nr = fwrite(buf, stride, 1, fp); // write out the line
         if(1 != nr) {

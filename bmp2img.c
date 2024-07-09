@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+#include <libgen.h>
 #include "bmp.h"
 
 typedef struct {
@@ -54,7 +55,7 @@ int main(int argc, char *argv[]) {
     printf("BMP to SSI-IMG image converter\n");
 
     if((argc < 2) || (argc > 3)) {
-        printf("USAGE %s [infile] <outfile>\n", argv[0]);
+        printf("USAGE: %s [infile] <outfile>\n", basename(argv[0]));
         printf("[infile] is the name of the input file\n");
         printf("<outfile> is optional and the name of the output file\n");
         printf("if omitted, the output will be named the same as infile, except with a .IMG extension\n");
@@ -89,7 +90,7 @@ int main(int argc, char *argv[]) {
         strncat(fo_name,".IMG", namelen+4); // add bmp extension
     }
 
-    printf("Loading BMP File: %s\n", fi_name);
+    printf("Loading BMP File: '%s'\n", fi_name);
     rval = load_bmp(&src, fi_name, &width, &height);
     if(0 != rval) {
         printf("BMP Load Error (%d)\n", rval);
@@ -107,7 +108,7 @@ int main(int argc, char *argv[]) {
     lin2pln(&img, &src);
 
     // create/open the input file
-    printf("Creating IMG File: %s\n", fo_name);
+    printf("Creating IMG File: '%s'\n", fo_name);
     if(NULL == (fo = fopen(fo_name,"wb"))) {
         printf("Error: Unable to open output file\n");
         goto CLEANUP;
@@ -134,21 +135,21 @@ CLEANUP:
 /// @return returns the size of the file
 size_t filesize(FILE *f) {
     size_t szll, cp;
-    cp = ftell(f); // save current position
-    fseek(f, 0, SEEK_END); // find the end
-    szll = ftell(f); // get positon of the end
-    fseek(f, cp, SEEK_SET); // restor the file position
-    return szll; // return position of the end as size
+    cp = ftell(f);           // save current position
+    fseek(f, 0, SEEK_END);   // find the end
+    szll = ftell(f);         // get positon of the end
+    fseek(f, cp, SEEK_SET);  // restore the file position
+    return szll;             // return position of the end as size
 }
 
-/// @brief removes the extension form a filename
+/// @brief removes the extension from a filename
 /// @param fn sting pointer to the filename
 void drop_extension(char *fn) {
     char *extension = strrchr(fn, '.');
     if(NULL != extension) *extension = 0; // strip out the existing extension
 }
 
-/// @brief converts a panerized image to a linear one, assumes 16 colour 4 bits per pixel
+/// @brief converts a linear image to a planerized one, assumes 16 colour 4 bits per pixel
 /// @param dst memstream buffer pointing to buffer large enough for packed planar image (4 bits per pixel)
 /// @param src memstream buffer pointing to a buffer containing the unpacked linear image (1 byte per pixel)
 void lin2pln(memstream_buf_t *dst, memstream_buf_t *src) {
@@ -289,10 +290,10 @@ int load_bmp(memstream_buf_t *dst, const char *fn, uint16_t *width, uint16_t *he
         // loop through all the pixels for a line
         // we are packing 2 pixels per byte, so width is half
         for(int x = 0; x < ((lw + 1) / 2); x++) {
-            uint8_t sp = buf[x]; // get the pixel pair
+            uint8_t sp = buf[x];      // get the pixel pair
             *px++ = (sp >> 4) & 0x0f; // write the 1st pixel
-            if((x * 2 + 1) < lw) { // test for odd pixel end
-                *px++ = sp & 0x0f; // write the 2nd pixel
+            if((x * 2 + 1) < lw) {    // test for odd pixel end
+                *px++ = sp & 0x0f;    // write the 2nd pixel
             }
         }
         if(!flip) { // if not flipped, wehave to walk backwards
