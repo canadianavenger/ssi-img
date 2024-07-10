@@ -61,7 +61,8 @@ int main(int argc, char *argv[]) {
     uint16_t height;
     uint8_t pal_sel = 1; // which CGA palette to use if CGA mode selected
     bool is_cga = false; // flag to indicate to use CGA mode
-    bmp_palette_entry_t *cga_pal = NULL; // the dynamically allocated CGA palette
+    bool is_amiga = false;
+    bmp_palette_entry_t *img_pal = NULL; // the dynamically allocated CGA palette
     bmp_palette_entry_t *pal = NULL; // set to point to which palette used (not allocted)
 
     printf("SSI-IMG to BMP image converter\n");
@@ -73,6 +74,7 @@ int main(int argc, char *argv[]) {
         printf("change the interpretation. (EGA is default)\n");
         printf("- a suffix of 'e' '640x200e' will force EGA interpretation of the input file\n");
         printf("- a suffix of 'c' '320x200c' will force CGA interpretation of the input file\n");
+        printf("- a suffix of 'c' '320x200a' will force Amiga interpretation of the input file\n");
         printf("The 'c' suffix also allows for an optional additonal suffix in the form of a\n");
         printf("single digit in the range of 0-5. This digit specifies which of the CGA palettes\n");
         printf("to use. eg '320x200c1' Palette 1 is the default if omitted\n");
@@ -145,12 +147,14 @@ int main(int argc, char *argv[]) {
                     goto CLEANUP;
                 }
             }
+        } else if('a' == tolower(charfmt)) { // special secret amiga mode
+            is_amiga = true;
         } else if('e' != tolower(charfmt)) {
             printf("Invalid format specifier\n");
             goto CLEANUP;
         }
     }
-    printf("Resolution: %d x %d %s\n", width, height, is_cga?"CGA":"EGA");
+    printf("Resolution: %d x %d %s\n", width, height, is_cga?"CGA":is_amiga?"Amiga":"EGA");
 
     // allocate buffer based on resolution
     // allocate the deplaned/unpaced image buffer (width * height)
@@ -184,6 +188,11 @@ int main(int argc, char *argv[]) {
             printf("File image and Specified image size mismatch for CGA\n");
             goto CLEANUP;
         }
+    } else if(is_amiga) {
+        if(fsz != ((width * height) / 2) + 64) {
+            printf("File image and Specified image size mismatch for Amiga\n");
+            goto CLEANUP;
+        }
     } else { // must be ega
         if(fsz != ((width * height) / 2)) {
             printf("File image and Specified image size mismatch for EGA\n");
@@ -201,16 +210,53 @@ int main(int argc, char *argv[]) {
     if(is_cga) {
         lace2lin(&src, &img, width, height); // de-interlace the image
         // create our palette 
-        if(NULL == (cga_pal = calloc(16, sizeof(bmp_palette_entry_t)))) {
+        if(NULL == (img_pal = calloc(16, sizeof(bmp_palette_entry_t)))) {
             printf("Unable to allocate memory\n");
             goto CLEANUP;
         }
         // copy the EGA palette entries over to their CGA locations
         // for the selected palette
         for(int p = 0; p < 4; p++) {
-            cga_pal[p] = ega_pal[cga2ega[pal_sel][p]];
+            img_pal[p] = ega_pal[cga2ega[pal_sel][p]];
         }
-        pal = cga_pal;
+        pal = img_pal;
+    } else if(is_amiga) {
+        size_t realsize = img.len;
+        img.len -= 64;
+        pln2lin(&src, &img); // deplane the image
+        if(NULL == (img_pal = calloc(16, sizeof(bmp_palette_entry_t)))) {
+            printf("Unable to allocate memory\n");
+            goto CLEANUP;
+        }
+        img.pos = img.len; // point to the end of the framebuffer / start of palette
+        img.len = realsize;
+        
+        // read in the palette, 2 bytes per entry, 4 bits per colour
+        for(int p = 0; p < 16; p++) {
+            uint16_t entry = img.data[img.pos++];
+            entry <<= 8;
+            entry |= img.data[img.pos++];
+
+            double comp = entry & 0x0f;
+            comp /= 15;
+            comp *= 255;
+            if(comp > 255.0) comp = 255;
+            img_pal[p].b = comp;
+            entry >>= 4;
+            comp = entry & 0x0f;
+            comp /= 15;
+            comp *= 255;
+            if(comp > 255.0) comp = 255;
+            img_pal[p].g = comp;
+            entry >>= 4;
+            comp = entry & 0x0f;
+            comp /= 15;
+            comp *= 255;
+            if(comp > 255.0) comp = 255;
+            img_pal[p].r = comp;
+        }
+
+        pal = img_pal;
     } else { // must be ega
         pln2lin(&src, &img); // deplane the image
         pal = ega_pal;
@@ -230,7 +276,7 @@ CLEANUP:
     fclose_s(fi);
     free_s(fi_name);
     free_s(fo_name);
-    free_s(cga_pal);
+    free_s(img_pal);
     free_s(img.data);
     free_s(src.data);
     return rval;
