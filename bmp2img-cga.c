@@ -16,7 +16,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
-#include <libgen.h>
 #include "bmp.h"
 
 typedef struct {
@@ -30,6 +29,8 @@ void lin2lace(memstream_buf_t *dst, memstream_buf_t *src, uint16_t width, uint16
 
 size_t filesize(FILE *f);
 void drop_extension(char *fn);
+char *filename(char *path);
+
 #define fclose_s(A) if(A) fclose(A); A=NULL
 #define free_s(A) if(A) free(A); A=NULL
 
@@ -47,7 +48,7 @@ int main(int argc, char *argv[]) {
     printf("BMP to SSI-IMG image converter\n");
 
     if((argc < 2) || (argc > 3)) {
-        printf("USAGE: %s [infile] <outfile>\n", basename(argv[0]));
+        printf("USAGE: %s [infile] <outfile>\n", filename(argv[0]));
         printf("[infile] is the name of the input file\n");
         printf("<outfile> is optional and the name of the output file\n");
         printf("if omitted, outfile will be named the same as infile with a .IMG extension\n");
@@ -139,6 +140,20 @@ size_t filesize(FILE *f) {
 void drop_extension(char *fn) {
     char *extension = strrchr(fn, '.');
     if(NULL != extension) *extension = 0; // strip out the existing extension
+}
+
+/// @brief Returns the filename portion of a path
+/// @param path filepath string
+/// @return a pointer to the filename portion of the path string
+char *filename(char *path) {
+	int i;
+
+	if(path == NULL || path[0] == '\0')
+		return "";
+	for(i = strlen(path) - 1; i >= 0 && path[i] != '/'; i--);
+	if(i == -1)
+		return "";
+	return &path[i+1];
 }
 
 /// @brief converts the image form a linear one to a interleved and packed one, assumes 2 bits per pixel
