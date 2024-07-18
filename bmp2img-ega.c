@@ -99,7 +99,7 @@ int main(int argc, char *argv[]) {
 
     lin2pln(&img, &src);
 
-    // create/open the input file
+    // create/open the output file
     printf("Creating IMG File: '%s'\n", fo_name);
     if(NULL == (fo = fopen(fo_name,"wb"))) {
         printf("Error: Unable to open output file\n");
