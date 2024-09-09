@@ -2,12 +2,40 @@ cmake_minimum_required(VERSION 3.10)
 # set the project name
 project(ssi-img)
 
+set (ProdDir "${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}/${CMAKE_SYSTEM_NAME}/${CMAKE_SYSTEM_PROCESSOR}")
+set (CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${ProdDir}/lib/static")
+set (CMAKE_LIBRARY_OUTPUT_DIRECTORY "${ProdDir}/lib/shared")
+set (CMAKE_RUNTIME_OUTPUT_DIRECTORY "${ProdDir}/bin")
+
 include_directories(
     "."
     "include"
+    "${PROJECT_NAME}/include"
 )
 
-# add the executable
-add_executable(bmp2img-cga executables/bmp2img-cga.c)
-add_executable(bmp2img-ega executables/bmp2img-ega.c)
-add_executable(img2bmp executables/img2bmp.c)
+if(NOT TARGET ${PROJECT_NAME})
+    add_subdirectory(${PROJECT_NAME})
+endif()
+
+set (common_sources
+    "tools/util.c"
+)
+
+set (bmp_sources
+    "tools/pal-tools.c"
+    "quickbmp/bmp.c"
+)
+
+set (executables
+    img2bmp
+    bmp2img-ega
+    bmp2img-cga
+    bmp2bin
+)
+
+add_library(quickbmp ${bmp_sources})
+
+foreach(executable IN LISTS executables)
+    add_executable(${executable} "executables/${executable}.c" ${common_sources})
+    target_link_libraries(${executable} "ssiimg" quickbmp)
+endforeach(executable IN LISTS executables)

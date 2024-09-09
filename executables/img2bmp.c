@@ -12,21 +12,48 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+#include "ssi-img.h"
 #include "bmp.h"
+#include "util.h"
 
-typedef struct {
-    size_t      len;         // length of buffer in bytes
-    size_t      pos;         // current byte position in buffer
-    uint8_t     *data;       // pointer to bytes in memory
-} memstream_buf_t;
-
-// default EGA/VGA 16 colour palette
-static bmp_palette_entry_t ega_pal[16] = { 
-  {0x00,0x00,0x00,0x00}, {0xaa,0x00,0x00,0x00}, {0x00,0xaa,0x00,0x00}, {0xaa,0xaa,0x00,0x00}, 
-  {0x00,0x00,0xaa,0x00}, {0xaa,0x00,0xaa,0x00}, {0x00,0x55,0xaa,0x00}, {0xaa,0xaa,0xaa,0x00},
-  {0x55,0x55,0x55,0x00}, {0xff,0x55,0x55,0x00}, {0x55,0xff,0x55,0x00}, {0xff,0xff,0x55,0x00}, 
-  {0x55,0x55,0xff,0x00}, {0xff,0x55,0xff,0x00}, {0x55,0xff,0xff,0x00}, {0xff,0xff,0xff,0x00},
+// EGA's 64 palette table entries
+static pal_entry_t ega_table[64] = { 
+  {0x00,0x00,0x00}, {0x00,0x00,0xaa}, {0x00,0xaa,0x00}, {0x00,0xaa,0xaa}, // 0x00-0x03
+  {0xaa,0x00,0x00}, {0xaa,0x00,0xaa}, {0xaa,0xaa,0x00}, {0xaa,0xaa,0xaa}, // 0x04-0x07
+  {0x00,0x00,0x55}, {0x00,0x00,0xff}, {0x00,0xaa,0x55}, {0x00,0xaa,0xff}, // 0x08-0x0b
+  {0xAA,0x00,0x55}, {0xAA,0x00,0xFF}, {0xAA,0xAA,0x55}, {0xAA,0xAA,0xFF}, // 0x0c-0x0f
+  {0x00,0x55,0x00}, {0x00,0x55,0xAA}, {0x00,0xFF,0x00}, {0x00,0xFF,0xAA}, // 0x10-0x13
+  {0xAA,0x55,0x00}, {0xAA,0x55,0xAA}, {0xAA,0xFF,0x00}, {0xAA,0xFF,0xAA}, // 0x14-0x17
+  {0x00,0x55,0x55}, {0x00,0x55,0xFF}, {0x00,0xFF,0x55}, {0x00,0xFF,0xFF}, // 0x18-0x1b
+  {0xAA,0x55,0x55}, {0xAA,0x55,0xFF}, {0xAA,0xFF,0x55}, {0xAA,0xFF,0xFF}, // 0x1c-0x1f
+  {0x55,0x00,0x00}, {0x55,0x00,0xAA}, {0x55,0xAA,0x00}, {0x55,0xAA,0xAA}, // 0x20-0x23
+  {0xFF,0x00,0x00}, {0xFF,0x00,0xAA}, {0xFF,0xAA,0x00}, {0xFF,0xAA,0xAA}, // 0x24-0x27
+  {0x55,0x00,0x55}, {0x55,0x00,0xFF}, {0x55,0xAA,0x55}, {0x55,0xAA,0xFF}, // 0x28-0x2b
+  {0xFF,0x00,0x55}, {0xFF,0x00,0xFF}, {0xFF,0xAA,0x55}, {0xFF,0xAA,0xFF}, // 0x2c-0x2f
+  {0x55,0x55,0x00}, {0x55,0x55,0xAA}, {0x55,0xFF,0x00}, {0x55,0xFF,0xAA}, // 0x30-0x33
+  {0xFF,0x55,0x00}, {0xFF,0x55,0xAA}, {0xFF,0xFF,0x00}, {0xFF,0xFF,0xAA}, // 0x34-0x37
+  {0x55,0x55,0x55}, {0x55,0x55,0xFF}, {0x55,0xFF,0x55}, {0x55,0xFF,0xFF}, // 0x38-0x3b
+  {0xFF,0x55,0x55}, {0xFF,0x55,0xFF}, {0xFF,0xFF,0x55}, {0xFF,0xFF,0xFF}  // 0x3c-0x3f
 };
+
+// default 16 ega colours (mapping in ega_table)
+uint8_t ega_pal[16] = {
+     0,  1,  2,  3, 
+     4,  5, 20,  7, 
+    56, 57, 58, 59, 
+    60, 61, 62, 63    
+};
+
+// SSI "Western Front" Title image palette
+/*
+static pal_entry_t ega_pal[16] = { 
+   0,  0, 60, 37, 
+  31, 59, 35, 10,
+  56,  4, 46, 46, 
+  39, 20, 62, 63
+};
+*/
+
 // remaps the CGA colour indicies to the EGA equivalents for each of the palettes
 // background is assumed to be black, though in reality it can be programmed to
 // any of the 16 colours
@@ -38,16 +65,6 @@ uint8_t cga2ega[6][4] = {
     {0,3,4,7},     // mode 5 low intensity            [black, dark cyan, dark red, light gray]
     {0,11,12,15}   // mode 5 high intensity           [black, light cyan, light red, white]
 };
-
-int save_bmp(const char *dst, memstream_buf_t *src, uint16_t width, uint16_t height, bmp_palette_entry_t *pal);
-void pln2lin(memstream_buf_t *dst, memstream_buf_t *src);
-void lace2lin(memstream_buf_t *dst, memstream_buf_t *src, uint16_t width, uint16_t height);
-
-size_t filesize(FILE *f);
-void drop_extension(char *fn);
-char *filename(char *path);
-#define fclose_s(A) if(A) fclose(A); A=NULL
-#define free_s(A) if(A) free(A); A=NULL
 
 int main(int argc, char *argv[]) {
     int rval = -1;
@@ -61,9 +78,10 @@ int main(int argc, char *argv[]) {
     uint16_t height;
     uint8_t pal_sel = 1; // which CGA palette to use if CGA mode selected
     bool is_cga = false; // flag to indicate to use CGA mode
-    bool is_amiga = false;
-    bmp_palette_entry_t *img_pal = NULL; // the dynamically allocated CGA palette
-    bmp_palette_entry_t *pal = NULL; // set to point to which palette used (not allocted)
+    bool is_amiga = false; // flag to indicate Amiga mode
+    bool is_interleaved = false; // flag to indicate interleaved mode
+    pal_entry_t *img_pal = NULL; // the dynamically allocated CGA palette
+    pal_entry_t *pal = NULL; // set to point to which palette used (not allocted)
 
     printf("SSI-IMG to BMP image converter\n");
 
@@ -74,7 +92,8 @@ int main(int argc, char *argv[]) {
         printf("change the interpretation. (EGA is default)\n");
         printf("- a suffix of 'e' '640x200e' will force EGA interpretation of the input file\n");
         printf("- a suffix of 'c' '320x200c' will force CGA interpretation of the input file\n");
-        printf("- a suffix of 'c' '320x200a' will force Amiga interpretation of the input file\n");
+        printf("- a suffix of 'a' '320x200a' will force Amiga interpretation of the input file\n");
+        printf("- a suffix of 'b' '320x200b' will force planar interleved interpretation fo the data\n");
         printf("The 'c' suffix also allows for an optional additonal suffix in the form of a\n");
         printf("single digit in the range of 0-5. This digit specifies which of the CGA palettes\n");
         printf("to use. eg '320x200c1' Palette 1 is the default if omitted\n");
@@ -149,12 +168,14 @@ int main(int argc, char *argv[]) {
             }
         } else if('a' == tolower(charfmt)) { // special secret amiga mode
             is_amiga = true;
+        } else if('b' == tolower(charfmt)) { // super secret interleaved mode
+            is_interleaved = true;
         } else if('e' != tolower(charfmt)) {
             printf("Invalid format specifier\n");
             goto CLEANUP;
         }
     }
-    printf("Resolution: %d x %d %s\n", width, height, is_cga?"CGA":is_amiga?"Amiga":"EGA");
+    printf("Resolution: %d x %d %s\n", width, height, is_cga?"CGA":is_amiga?"Amiga":is_interleaved?"EGA interleaved":"EGA");
 
     // allocate buffer based on resolution
     // allocate the deplaned/unpaced image buffer (width * height)
@@ -193,6 +214,11 @@ int main(int argc, char *argv[]) {
             printf("File image and Specified image size mismatch for Amiga\n");
             goto CLEANUP;
         }
+    } else if(is_interleaved) {
+        if(fsz != ((width * height) / 2)) {
+            printf("File image and Specified image size mismatch for EGA Interleaved\n");
+            goto CLEANUP;
+        }
     } else { // must be ega
         if(fsz != ((width * height) / 2)) {
             printf("File image and Specified image size mismatch for EGA\n");
@@ -210,21 +236,21 @@ int main(int argc, char *argv[]) {
     if(is_cga) {
         lace2lin(&src, &img, width, height); // de-interlace the image
         // create our palette 
-        if(NULL == (img_pal = calloc(16, sizeof(bmp_palette_entry_t)))) {
+        if(NULL == (img_pal = calloc(16, sizeof(pal_entry_t)))) {
             printf("Unable to allocate memory\n");
             goto CLEANUP;
         }
         // copy the EGA palette entries over to their CGA locations
         // for the selected palette
         for(int p = 0; p < 4; p++) {
-            img_pal[p] = ega_pal[cga2ega[pal_sel][p]];
+            img_pal[p] = ega_table[ega_pal[cga2ega[pal_sel][p]]];
         }
         pal = img_pal;
     } else if(is_amiga) {
         size_t realsize = img.len;
         img.len -= 64;
         pln2lin(&src, &img); // deplane the image
-        if(NULL == (img_pal = calloc(16, sizeof(bmp_palette_entry_t)))) {
+        if(NULL == (img_pal = calloc(16, sizeof(pal_entry_t)))) {
             printf("Unable to allocate memory\n");
             goto CLEANUP;
         }
@@ -236,35 +262,39 @@ int main(int argc, char *argv[]) {
             uint16_t entry = img.data[img.pos++];
             entry <<= 8;
             entry |= img.data[img.pos++];
-
-            double comp = entry & 0x0f;
-            comp /= 15;
-            comp *= 255;
-            if(comp > 255.0) comp = 255;
-            img_pal[p].b = comp;
+            img_pal[p].b = entry & 0x0f;
             entry >>= 4;
-            comp = entry & 0x0f;
-            comp /= 15;
-            comp *= 255;
-            if(comp > 255.0) comp = 255;
-            img_pal[p].g = comp;
+            img_pal[p].g = entry & 0x0f;
             entry >>= 4;
-            comp = entry & 0x0f;
-            comp /= 15;
-            comp *= 255;
-            if(comp > 255.0) comp = 255;
-            img_pal[p].r = comp;
+            img_pal[p].r = entry & 0x0f;
         }
-
+        pal4_to_pal8(img_pal, img_pal, 16);
+        pal = img_pal;
+    } else if(is_interleaved) {
+        ipln2lin(&src, &img, width, height); // deplane (interleaved) the image
+        if(NULL == (img_pal = calloc(16, sizeof(pal_entry_t)))) {
+            printf("Unable to allocate memory\n");
+            goto CLEANUP;
+        }
+        for(int p = 0; p < 16; p++) {
+            img_pal[p] = ega_table[ega_pal[p]];
+        }
         pal = img_pal;
     } else { // must be ega
         pln2lin(&src, &img); // deplane the image
-        pal = ega_pal;
+        if(NULL == (img_pal = calloc(16, sizeof(pal_entry_t)))) {
+            printf("Unable to allocate memory\n");
+            goto CLEANUP;
+        }
+        for(int p = 0; p < 16; p++) {
+            img_pal[p] = ega_table[ega_pal[p]];
+        }
+        pal = img_pal;
     }
     src.pos = 0; // reset the src position
 
     printf("Creating BMP File: '%s'\n", fo_name);
-    rval = save_bmp(fo_name, &src, width, height, pal);
+    rval = save_bmp4(fo_name, &src, width, height, pal);
     if(0 != rval) {
         printf("BMP Save Error (%d)\n", rval);
         goto CLEANUP;
@@ -279,212 +309,5 @@ CLEANUP:
     free_s(img_pal);
     free_s(img.data);
     free_s(src.data);
-    return rval;
-}
-
-/// @brief determins the size of the file
-/// @param f handle to an open file
-/// @return returns the size of the file
-size_t filesize(FILE *f) {
-    size_t szll, cp;
-    cp = ftell(f);           // save current position
-    fseek(f, 0, SEEK_END);   // find the end
-    szll = ftell(f);         // get positon of the end
-    fseek(f, cp, SEEK_SET);  // restore the file position
-    return szll;             // return position of the end as size
-}
-
-/// @brief removes the extension from a filename
-/// @param fn sting pointer to the filename
-void drop_extension(char *fn) {
-    char *extension = strrchr(fn, '.');
-    if(NULL != extension) *extension = 0; // strip out the existing extension
-}
-
-/// @brief Returns the filename portion of a path
-/// @param path filepath string
-/// @return a pointer to the filename portion of the path string
-char *filename(char *path) {
-	int i;
-
-	if(path == NULL || path[0] == '\0')
-		return "";
-	for(i = strlen(path) - 1; i >= 0 && path[i] != '/'; i--);
-	if(i == -1)
-		return "";
-	return &path[i+1];
-}
-
-/// @brief converts a planerized image to a linear one, assumes 16 colour 4 bits per pixel
-/// @param dst memstream buffer pointing to buffer large enough for 1 byte per pixel
-/// @param src memstream buffer pointing to a buffer containing the packed planar image
-void pln2lin(memstream_buf_t *dst, memstream_buf_t *src) {
-    int ofs2 = src->len / 2;  // 1/2
-    int ofs1 = ofs2 / 2;      // 1/4
-    int ofs3 = ofs1 + ofs2;   // 3/4
-
-    for(int i = 0; i < ofs1; i++) {
-        uint8_t p0 = src->data[       i];
-        uint8_t p1 = src->data[ofs1 + i];
-        uint8_t p2 = src->data[ofs2 + i];
-        uint8_t p3 = src->data[ofs3 + i];
-
-        for(int b = 0; b < 8; b++) { // 8 pixels packed per byte
-            uint8_t px = 0;
-            px |= p0 & 0x80; px >>= 1;
-            px |= p1 & 0x80; px >>= 1;
-            px |= p2 & 0x80; px >>= 1;
-            px |= p3 & 0x80; px >>= 4; // final shift
-            if(dst->pos < dst->len) dst->data[dst->pos++] = px;
-            p0 <<= 1; p1 <<= 1; p2 <<= 1; p3 <<= 1; // shift in the next pixel
-        }
-    }
-}
-
-/// @brief converts a interleved image to a linear one, assumes 4 colour 2 bits per pixel
-/// @param dst memstream buffer pointing to buffer large enough for 1 byte per pixel
-/// @param src memstream buffer pointing to a buffer containing the packed planar image
-void lace2lin(memstream_buf_t *dst, memstream_buf_t *src, uint16_t width, uint16_t height) {
-    width /= 4;  // we expect 4 pixels per byte
-    height /= 2; // we always expect lines to be in interleved pairs
-
-    int even_pos = 0;
-    int odd_pos = src->len / 2; // 1/2
-
-    for(int y = 0; y < height; y++) {
-        // even line
-        for(int x = 0; x < width; x++) {
-            uint16_t pbuf = src->data[even_pos++];
-            for(int b = 0; b < 4; b++) { // 4 pixels per byte
-                pbuf <<= 2; // shift in the pixel
-                uint8_t px = (pbuf >> 8) & 0x03; // move it to position and mask
-                if(dst->pos < dst->len) dst->data[dst->pos++] = px; 
-            }
-        }
-        // odd line
-        for(int x = 0; x < width; x++) {
-            uint16_t pbuf = src->data[odd_pos++];
-            for(int b = 0; b < 4; b++) { // 4 pixels per byte
-                pbuf <<= 2; // shift in the pixel
-                uint8_t px = (pbuf >> 8) & 0x03; // move it to position and mask
-                if(dst->pos < dst->len) dst->data[dst->pos++] = px; 
-            }
-        }
-    }
-}
-
-// allocate a header buffer large enough for all 3 parts, plus 16 bit padding at the start to 
-// maintian 32 bit alignment after the 16 bit signature.
-#define HDRBUFSZ (sizeof(bmp_signature_t) + sizeof(bmp_header_t))
-
-/// @brief saves the image pointed to by src as a BMP, assumes 16 colour 1 byte per pixel image data
-/// @param fn name of the file to create and write to
-/// @param src memstream buffer pointer to the source image data
-/// @param width  width of the image in pixels
-/// @param height height of the image in pixels or lines
-/// @param pal pointe to 16 entry palette
-/// @return 0 on success, otherwise an error code
-int save_bmp(const char *fn, memstream_buf_t *src, uint16_t width, uint16_t height, bmp_palette_entry_t *pal) {
-    int rval = 0;
-    FILE *fp = NULL;
-    uint8_t *buf = NULL; // line buffer, also holds header info
-
-    // do some basic error checking on the inputs
-    if((NULL == fn) || (NULL == src) || (NULL == src->data)) {
-        rval = -1;  // NULL pointer error
-        goto bmp_cleanup;
-    }
-
-    // try to open/create output file
-    if(NULL == (fp = fopen(fn,"wb"))) {
-        rval = -2;  // can't open/create output file
-        goto bmp_cleanup;
-    }
-
-    // stride is the bytes per line in the BMP file, which are padded
-    // out to 32 bit boundaries
-    uint32_t stride = ((width + 3) & (~0x0003)) / 2; // we get 2 pixels per byte for being 16 colour
-    uint32_t bmp_img_sz = (stride) * height;
-
-    // allocate a buffer to hold the header and a single scanline of data
-    // this could be optimized if necessary to only allocate the larger of
-    // the line buffer, or the header + padding as they are used at mutually
-    // exclusive times
-    if(NULL == (buf = calloc(1, HDRBUFSZ + stride + 2))) {
-        rval = -3;  // unable to allocate mem
-        goto bmp_cleanup;
-    }
-
-    // signature starts after padding to maintain 32bit alignment for the rest of the header
-    bmp_signature_t *sig = (bmp_signature_t *)&buf[stride + 2];
-
-    // bmp header starts after signature
-    bmp_header_t *bmp = (bmp_header_t *)&buf[stride + 2 + sizeof(bmp_signature_t)];
-
-    // setup the signature and DIB header fields
-    *sig = BMPFILESIG;
-    size_t palsz = sizeof(bmp_palette_entry_t) * 16;
-    bmp->dib.image_offset = HDRBUFSZ + palsz;
-    bmp->dib.file_size = bmp->dib.image_offset + bmp_img_sz;
-
-    // setup the bmi header fields
-    bmp->bmi.header_size = sizeof(bmi_header_t);
-    bmp->bmi.image_width = width;
-    bmp->bmi.image_height = height;
-    bmp->bmi.num_planes = 1;           // always 1
-    bmp->bmi.bits_per_pixel = 4;       // 16 colour image
-    bmp->bmi.compression = 0;          // uncompressed
-    bmp->bmi.bitmap_size = bmp_img_sz;
-    bmp->bmi.horiz_res = BMP96DPI;
-    bmp->bmi.vert_res = BMP96DPI;
-    bmp->bmi.num_colors = 16;          // palette has 16 colours
-    bmp->bmi.important_colors = 0;     // all colours are important
-
-    // write out the header
-    int nr = fwrite(sig, HDRBUFSZ, 1, fp);
-    if(1 != nr) {
-        rval = -4;  // unable to write file
-        goto bmp_cleanup;
-    }
-
-    // we're using our global palette here, wich is already in BMP format
-    // write out the palette
-    nr = fwrite(pal, palsz, 1, fp);
-    if(1 != nr) {
-        rval = -4;  // can't write file
-        goto bmp_cleanup;
-    }
-
-    // now we need to output the image scanlines. For maximum
-    // compatibility we do so in the natural order for BMP
-    // which is from bottom to top. For 16 colour/4 bit image
-    // the pixels are packed two per byte, left most pixel in
-    // the most significant nibble.
-    // start by pointing to start of last line of data
-    uint8_t *px = &src->data[src->len - width];
-    // loop through the lines
-    for(int y = 0; y < height; y++) {
-        memset(buf, 0, stride); // zero out the line in the output buffer
-        // loop through all the pixels for a line
-        // we are packing 2 pixels per byte, so width is half
-        for(int x = 0; x < ((width + 1) / 2); x++) {
-            uint8_t sp = *px++;          // get the first pixel
-            sp <<= 4;                    // shift to make room
-            if((x * 2 + 1) < width) {    // test for odd pixel end
-                sp |= (*px++) & 0x0f;    // get the next pixel
-            }
-            buf[x] = sp;                 // write it to the line buffer
-        }
-        nr = fwrite(buf, stride, 1, fp); // write out the line
-        if(1 != nr) {
-            rval = -4;  // unable to write file
-            goto bmp_cleanup;
-        }
-        px -= (width * 2); // move back to start of previous line
-    }
-
-bmp_cleanup:
-    fclose_s(fp);
-    free_s(buf);
     return rval;
 }

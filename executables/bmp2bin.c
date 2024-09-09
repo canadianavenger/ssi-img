@@ -1,10 +1,10 @@
 /*
- * bmp2img-cga.c 
- * Converts a given Windows BMP file to a SSI-IMG (for EGA/VGA graphics)
+ * bmp2img-ega.c 
+ * Converts a given Windows BMP file to a SSI-BIN/IMG (for EGA/VGA graphics)
  * 
  * The BMP file must be an uncompressed 16 colour indexed BMP. This program does
  * not do any palette matching or remapping, so it is expected that the colour
- * indicies are those of one of the CGA 4 colour palettes
+ * indicies are those of the EGA/VGA 16 colour palette
  * 
  * This code is offered without warranty under the MIT License. Use it as you will 
  * personally or commercially, just give credit if you do.
@@ -31,13 +31,13 @@ int main(int argc, char *argv[]) {
     uint16_t width;
     uint16_t height;
 
-    printf("BMP to SSI-IMG image converter\n");
+    printf("BMP to SSI-BIN IMG image converter\n");
 
     if((argc < 2) || (argc > 3)) {
         printf("USAGE: %s [infile] <outfile>\n", filename(argv[0]));
         printf("[infile] is the name of the input file\n");
         printf("<outfile> is optional and the name of the output file\n");
-        printf("if omitted, outfile will be named the same as infile with a .IMG extension\n");
+        printf("if omitted, outfile will be named the same as infile with a .BIN extension\n");
         return -1;
     }
     argv++; argc--; // consume the first arg (program name)
@@ -66,7 +66,7 @@ int main(int argc, char *argv[]) {
         }
         strncpy(fo_name, fi_name, namelen);
         drop_extension(fo_name); // remove exisiting extension
-        strncat(fo_name,".IMG", namelen+4); // add bmp extension
+        strncat(fo_name,".BIN", namelen+4); // add bmp extension
     }
 
     printf("Loading BMP File: '%s'\n", fi_name);
@@ -78,16 +78,16 @@ int main(int argc, char *argv[]) {
 
     printf("Resolution: %d x %d\n", width, height);
 
-    if(NULL == (img.data = calloc(1, 16384))) {
+    if(NULL == (img.data = calloc(height, width/2))) {
         printf("Unable to allocate memory\n");
         goto CLEANUP;
     }
-    img.len = 16384; // CGA image is always 16K
+    img.len = (width * height) / 2;
 
-    lin2lace(&img, &src, width, height);
+    lin2ipln(&img, &src, width, height);
 
     // create/open the output file
-    printf("Creating IMG File: '%s'\n", fo_name);
+    printf("Creating BIN File: '%s'\n", fo_name);
     if(NULL == (fo = fopen(fo_name,"wb"))) {
         printf("Error: Unable to open output file\n");
         goto CLEANUP;
