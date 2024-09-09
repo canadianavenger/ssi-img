@@ -21,7 +21,7 @@ Note: All the programs accept an optional 2nd filename parameter for the output 
 ## The IMG File Format
 In the end this format turned out to be nothing more than a raw framebuffer capture, and thus its organization is dependant on the video mode being utilized. ~~This essentially appears to be the *Borland BGI* libraries `getimage()` image data with the width and height prefix removed. (It may be possible that this generation of the BGI library did not prefix with width and height as well)~~ So far I've only come across EGA/VGA and CGA variants of this format.
 
-## The BIN File Format
+### The BIN File Format
 This is similar to the IMG file format except rather than the image data being stored as full contiguous planes the image data is stored as interleved lines of planer data. Meaning that all 4 planes of data are stored for line 0 this is then followed by all 4 planes of data for line 1, and so on. So far I've only encountered an EGA/VGA 16 colour variant.
 
 ### EGA Framebuffer Organization
