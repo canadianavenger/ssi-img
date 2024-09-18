@@ -100,6 +100,7 @@ void lin2ipln(memstream_buf_t *dst, memstream_buf_t *src, uint16_t width, uint16
                 p2 |= px & 0x01; px >>= 1;
                 p3 |= px & 0x01; px >>= 1; // final shift
             }
+            // write it to the output
             dst->data[base +        x] = p0;
             dst->data[base + ofs1 + x] = p1;
             dst->data[base + ofs2 + x] = p2;
