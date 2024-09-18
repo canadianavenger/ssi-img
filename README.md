@@ -5,6 +5,7 @@ This repository is a companion to my blog post about the reverse engineering of 
 - Red Lightning (1989)
 - Conflict: Middle East (1991)
 - Conflict: Korea (1992) [Only for CGA graphics]
+- Western Front (1991) [.BIN format]
 
 ## The Code
 
@@ -13,11 +14,15 @@ In this repo there are three C programs, each is a standalone utility for conver
 - `img2bmp.c` converts from `.img` to `.bmp` as no image metadata exists in the img file it must be passed as a parameter on the command-line, along with the filename eg `img2bmp 640x200 EGAHEXES.img`. The resultant BMP file will be a 16 colour indexed image with the EGA palette. An additional suffix of 'c', 'e', or 'a' can be added to the resolution parameter to indicate a CGA (c) or EGA (e) or Amiga (a) file.The 'c' suffix may also optionally be followed by a single digit on the range of 0-5 to denote which palette to use, by defauly palette 1 is used if omitted. EGA is assumed if the character parameter is omitted. eg `img2bmp 320x200c1 CGAHEXES.img` Note that the palette selection is for rendering to the BMP only, and has no effect on how the image would be presented in-game.
 - `bmp2img-ega.c` converts from `.bmp` to `.img` (EGA/VGA variant) only the file name is required in this case, as the BMP file carries all the necessary information eg `bmp2img-ega CUSTOMHEXES.bmp`. The BMP file in this case **must** be a uncompressed 16 colour indexed image. It is assumed that the colour indexes align with those of the EGA palette. No colour matching/palette remapping is performed.
 - `bmp2img-cga.c` converts from `.bmp` to `.img` (CGA variant) only the file name is required in this case, as the BMP file carries all the necessary information eg `bmp2img-cga CUSTOMHEXES.bmp`. The BMP file in this case **must** be a uncompressed 16 colour indexed image, though the indices must only range 0-3. It is assumed that the colour indexes align with those of the CGA palette. No colour matching/palette remapping is performed.
+- `bmp2bin.c` converts from `.bmp` to `.bin` (EGA/VGA variant) only the file name is required in this case, as the BMP file carries all the necessary information eg `bmp2bin CUSTOM.bmp`. The BMP file in this case **must** be a uncompressed 16 colour indexed image. It is assumed that the colour indexes align with those of the EGA palette. No colour matching/palette remapping is performed.
 
 Note: All the programs accept an optional 2nd filename parameter for the output file. If this parameter is not provided then the output file will have the same name as the input, just with extension changed to match the format. 
 
 ## The IMG File Format
-In the end this format turned out to be nothing more than a raw framebuffer capture, and thus its organization is dependant on the video mode being utilized. ~~This essentially appears to be the *Borland BGI* libraries `getimage()` image data with the width and height prefix removed. (It may be possible that this generation of the BGI library did not prefix with width and height as well)~~ So far I've only come across EGA/VGA and CGA variants of this format. 
+In the end this format turned out to be nothing more than a raw framebuffer capture, and thus its organization is dependant on the video mode being utilized. ~~This essentially appears to be the *Borland BGI* libraries `getimage()` image data with the width and height prefix removed. (It may be possible that this generation of the BGI library did not prefix with width and height as well)~~ So far I've only come across EGA/VGA and CGA variants of this format.
+
+### The BIN File Format
+This is similar to the IMG file format except rather than the image data being stored as full contiguous planes the image data is stored as interleved lines of planer data. Meaning that all 4 planes of data are stored for line 0 this is then followed by all 4 planes of data for line 1, and so on. So far I've only encountered an EGA/VGA 16 colour variant.
 
 ### EGA Framebuffer Organization
 For EGA 16 colour graphics mode the image data is separated into 4 separate image planes. Each plane is 16000 bytes in size (80 bytes per line, 200 lines for 640x200) When writing to EGA memory, it is possible to write to more than one plane at a time through the use of a mask register. However when reading from EGA video memory, only a single plane can be accessed at a time. Pixels are packed 8 per byte on each plane. Reconstruction requires reading of all 4 planes and extracting the corresponding bits.
