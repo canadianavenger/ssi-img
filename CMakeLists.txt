@@ -51,7 +51,7 @@ set (executables
 
 #build all our program executables
 foreach(executable IN LISTS executables)
-    add_executable(${executable} "executables/${executable}.c" ${common_sources})
+    add_executable(${executable} "src/${executable}.c" ${common_sources})
     target_link_libraries(${executable} "ssiimg" quickbmp)
     # for convenience copy the executables into the projects bin directory
     add_custom_command(TARGET ${executable} POST_BUILD
@@ -60,9 +60,11 @@ foreach(executable IN LISTS executables)
     install(TARGETS ${executable} DESTINATION ".")
 endforeach(executable IN LISTS executables)
 
-# rename Darwin to MacOS for a more friendly package name
+# make a more friendly package name
 if("Darwin" STREQUAL ${CMAKE_HOST_SYSTEM_NAME})
-    set (PACKAGE_HOST "MacOS")
+    set (PACKAGE_HOST "Mac")
+elseif("Windows" STREQUAL ${CMAKE_HOST_SYSTEM_NAME})
+    set (PACKAGE_HOST "Win")
 else()
     set (PACKAGE_HOST "${CMAKE_SYSTEM_NAME}")
 endif()

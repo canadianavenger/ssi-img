@@ -46,7 +46,7 @@ uint8_t ega_pal[16] = {
 
 // SSI "Western Front" Title image palette
 /*
-static pal_entry_t ega_pal[16] = { 
+uint8_t ega_pal[16] = { 
    0,  0, 60, 37, 
   31, 59, 35, 10,
   56,  4, 46, 46, 
@@ -107,7 +107,7 @@ int main(int argc, char *argv[]) {
         printf("[infile] is the name of the input file\n");
         printf("<outfile> is optional and the name of the output file\n");
         printf("if omitted, outfile will be named the same as infile with a .BMP extension\n");
-         return -1;
+        return -1;
     }
     argv++; argc--; // consume the first arg (program name)
 
