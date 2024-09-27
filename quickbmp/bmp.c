@@ -140,7 +140,7 @@ int save_bmp4(const char *fn, memstream_buf_t *src, uint16_t width, uint16_t hei
 
     // stride is the bytes per line in the BMP file, which are padded
     // out to 32 bit boundaries
-    uint32_t stride = ((width + 3) & (~0x0003)) / 2; // we get 2 pixels per byte for being 16 colour
+    uint32_t stride = ((((width + 1) / 2) + 3) & (~0x0003)); // we get 2 pixels per byte for being 16 colour
     uint32_t bmp_img_sz = (stride) * height;
 
     // allocate a buffer to hold the header and a single scanline of data
